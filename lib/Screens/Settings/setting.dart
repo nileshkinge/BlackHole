@@ -29,6 +29,7 @@ import 'package:blackhole/Helpers/config.dart';
 import 'package:blackhole/Helpers/countrycodes.dart';
 import 'package:blackhole/Helpers/github.dart';
 import 'package:blackhole/Helpers/picker.dart';
+import 'package:blackhole/Helpers/update.dart';
 import 'package:blackhole/Screens/Home/saavn.dart' as home_screen;
 import 'package:blackhole/Screens/Settings/player_gradient.dart';
 import 'package:blackhole/Screens/Top Charts/top.dart' as top_screen;
@@ -154,25 +155,6 @@ class _SettingPageState extends State<SettingPage>
     );
   }
 
-  bool compareVersion(String latestVersion, String currentVersion) {
-    bool update = false;
-    final List<String> latestList = latestVersion.split('.');
-    final List<String> currentList = currentVersion.split('.');
-
-    for (int i = 0; i < latestList.length; i++) {
-      try {
-        if (int.parse(latestList[i]) > int.parse(currentList[i])) {
-          update = true;
-          break;
-        }
-      } catch (e) {
-        break;
-      }
-    }
-
-    return update;
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -264,7 +246,7 @@ class _SettingPageState extends State<SettingPage>
                           ),
                           keyName: 'darkMode',
                           defaultValue: true,
-                          onChanged: (bool val, Box box) {
+                          onChanged: ({required bool val, required Box box}) {
                             box.put(
                               'useSystemTheme',
                               false,
@@ -285,7 +267,7 @@ class _SettingPageState extends State<SettingPage>
                           ),
                           keyName: 'useSystemTheme',
                           defaultValue: true,
-                          onChanged: (bool val, Box box) {
+                          onChanged: ({required bool val, required Box box}) {
                             currentTheme.switchTheme(useSystemTheme: val);
                             switchToCustomTheme();
                           },
@@ -1864,7 +1846,7 @@ class _SettingPageState extends State<SettingPage>
                           ),
                           keyName: 'showPlaylist',
                           defaultValue: true,
-                          onChanged: (val, box) {
+                          onChanged: ({required bool val, required Box box}) {
                             widget.callback!();
                           },
                         ),
@@ -1884,7 +1866,7 @@ class _SettingPageState extends State<SettingPage>
                           ),
                           keyName: 'showRecent',
                           defaultValue: true,
-                          onChanged: (val, box) {
+                          onChanged: ({required bool val, required Box box}) {
                             widget.callback!();
                           },
                         ),
@@ -3177,7 +3159,7 @@ class _SettingPageState extends State<SettingPage>
                           keyName: 'useProxy',
                           defaultValue: false,
                           isThreeLine: true,
-                          onChanged: (bool val, Box box) {
+                          onChanged: ({required bool val, required Box box}) {
                             useProxy = val;
                             setState(
                               () {},
@@ -4253,7 +4235,7 @@ class BoxSwitchTile extends StatelessWidget {
   final String keyName;
   final bool defaultValue;
   final bool? isThreeLine;
-  final Function(bool, Box box)? onChanged;
+  final Function({required bool val, required Box box})? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -4270,7 +4252,7 @@ class BoxSwitchTile extends StatelessWidget {
               defaultValue,
           onChanged: (val) {
             box.put(keyName, val);
-            onChanged?.call(val, box);
+            onChanged?.call(val: val, box: box);
           },
         );
       },

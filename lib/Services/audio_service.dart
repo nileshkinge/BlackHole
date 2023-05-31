@@ -508,6 +508,21 @@ class AudioPlayerHandlerImpl extends BaseAudioHandler
         ],
       );
       _player = AudioPlayer(audioPipeline: pipeline);
+
+      // Enable equalizer if used earlier
+      final eqValue = Hive.box('settings').get('setEqualizer') as bool;
+      _equalizer.setEnabled(eqValue);
+
+      // set equalizer params & bands
+      _equalizerParams ??= await _equalizer.parameters;
+      final List<AndroidEqualizerBand> bands = _equalizerParams!.bands;
+      bands.map(
+        (e) {
+          final gain =
+              Hive.box('settings').get('equalizerBand${e.index}') as double;
+          _equalizerParams!.bands[e.index].setGain(gain);
+        },
+      );
     } else {
       Logger.root.info('starting without eq pipeline');
       _player = AudioPlayer();
@@ -554,7 +569,7 @@ class AudioPlayerHandlerImpl extends BaseAudioHandler
   }
 
   Future<void> addLastQueue(List<MediaItem> queue) async {
-    if (queue.first.genre != 'YouTube') {
+    if (queue.isNotEmpty && queue.first.genre != 'YouTube') {
       Logger.root.info('saving last queue');
       final lastQueue =
           queue.map((item) => MediaItemConverter.mediaItemToMap(item)).toList();
@@ -596,7 +611,7 @@ class AudioPlayerHandlerImpl extends BaseAudioHandler
   Future<void> updateQueue(List<MediaItem> newQueue) async {
     await _playlist.clear();
     await _playlist.addAll(_itemsToSources(newQueue));
-    addLastQueue(newQueue);
+    // addLastQueue(newQueue);
     // stationId = '';
     // stationNames = newQueue.map((e) => e.id).toList();
     // SaavnAPI()
@@ -694,6 +709,7 @@ class AudioPlayerHandlerImpl extends BaseAudioHandler
     _player!.pause();
     await Hive.box('cache').put('lastIndex', _player!.currentIndex);
     await Hive.box('cache').put('lastPos', _player!.position.inSeconds);
+    await addLastQueue(queue.value);
   }
 
   @override
@@ -709,6 +725,7 @@ class AudioPlayerHandlerImpl extends BaseAudioHandler
     Logger.root.info('caching last index and position');
     await Hive.box('cache').put('lastIndex', _player!.currentIndex);
     await Hive.box('cache').put('lastPos', _player!.position.inSeconds);
+    await addLastQueue(queue.value);
   }
 
   @override

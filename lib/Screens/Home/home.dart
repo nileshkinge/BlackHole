@@ -28,9 +28,11 @@ import 'package:blackhole/CustomWidgets/textinput_dialog.dart';
 import 'package:blackhole/Helpers/backup_restore.dart';
 import 'package:blackhole/Helpers/downloads_checker.dart';
 import 'package:blackhole/Helpers/github.dart';
+import 'package:blackhole/Helpers/update.dart';
 import 'package:blackhole/Screens/Home/saavn.dart';
 import 'package:blackhole/Screens/Library/library.dart';
 import 'package:blackhole/Screens/LocalMusic/downed_songs.dart';
+import 'package:blackhole/Screens/LocalMusic/downed_songs_desktop.dart';
 import 'package:blackhole/Screens/Search/search.dart';
 import 'package:blackhole/Screens/Settings/setting.dart';
 import 'package:blackhole/Screens/Top Charts/top.dart';
@@ -40,7 +42,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:logging/logging.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -80,26 +81,6 @@ class _HomePageState extends State<HomePage> {
     _pageController.jumpToPage(
       index,
     );
-  }
-
-  bool compareVersion(String latestVersion, String currentVersion) {
-    bool update = false;
-    final List latestList = latestVersion.split('.');
-    final List currentList = currentVersion.split('.');
-
-    for (int i = 0; i < latestList.length; i++) {
-      try {
-        if (int.parse(latestList[i] as String) >
-            int.parse(currentList[i] as String)) {
-          update = true;
-          break;
-        }
-      } catch (e) {
-        Logger.root.severe('Error while comparing versions: $e');
-        break;
-      }
-    }
-    return update;
   }
 
   Future<bool> handleWillPop(BuildContext context) async {
@@ -347,27 +328,30 @@ class _HomePageState extends State<HomePage> {
                           Navigator.pop(context);
                         },
                       ),
-                      if (Platform.isAndroid)
-                        ListTile(
-                          title: Text(AppLocalizations.of(context)!.myMusic),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 20.0),
-                          leading: Icon(
-                            MdiIcons.folderMusic,
-                            color: Theme.of(context).iconTheme.color,
-                          ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const DownloadedSongs(
-                                  showPlaylists: true,
-                                ),
-                              ),
-                            );
-                          },
+                      ListTile(
+                        title: Text(AppLocalizations.of(context)!.myMusic),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 20.0),
+                        leading: Icon(
+                          MdiIcons.folderMusic,
+                          color: Theme.of(context).iconTheme.color,
                         ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => (Platform.isWindows ||
+                                      Platform.isLinux ||
+                                      Platform.isMacOS)
+                                  ? const DownloadedSongsDesktop()
+                                  : const DownloadedSongs(
+                                      showPlaylists: true,
+                                    ),
+                            ),
+                          );
+                        },
+                      ),
                       ListTile(
                         title: Text(AppLocalizations.of(context)!.downs),
                         contentPadding:
@@ -435,13 +419,15 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     children: <Widget>[
                       const Spacer(),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(5, 30, 5, 20),
-                        child: Center(
-                          child: Text(
-                            AppLocalizations.of(context)!.madeBy,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12),
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(5, 30, 5, 20),
+                          child: Center(
+                            child: Text(
+                              AppLocalizations.of(context)!.madeBy,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ),
                         ),
                       ),
@@ -491,24 +477,22 @@ class _HomePageState extends State<HomePage> {
                             .colorScheme
                             .secondary
                             .withOpacity(0.2),
-                        leading: screenWidth > 1050
-                            ? null
-                            : Builder(
-                                builder: (context) => Transform.rotate(
-                                  angle: 22 / 7 * 2,
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.horizontal_split_rounded,
-                                    ),
-                                    // color: Theme.of(context).iconTheme.color,
-                                    onPressed: () {
-                                      Scaffold.of(context).openDrawer();
-                                    },
-                                    tooltip: MaterialLocalizations.of(context)
-                                        .openAppDrawerTooltip,
-                                  ),
-                                ),
+                        leading: Builder(
+                          builder: (context) => Transform.rotate(
+                            angle: 22 / 7 * 2,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.horizontal_split_rounded,
                               ),
+                              // color: Theme.of(context).iconTheme.color,
+                              onPressed: () {
+                                Scaffold.of(context).openDrawer();
+                              },
+                              tooltip: MaterialLocalizations.of(context)
+                                  .openAppDrawerTooltip,
+                            ),
+                          ),
+                        ),
                         destinations: [
                           NavigationRailDestination(
                             icon: const Icon(Icons.home_rounded),
@@ -715,7 +699,9 @@ class _HomePageState extends State<HomePage> {
                                                           MediaQuery.of(context)
                                                                   .size
                                                                   .width -
-                                                              75,
+                                                              (rotated
+                                                                  ? 0
+                                                                  : 75),
                                                         ),
                                                   height: 55.0,
                                                   duration: const Duration(
@@ -794,7 +780,7 @@ class _HomePageState extends State<HomePage> {
                                   },
                                   body: SaavnHomePage(),
                                 ),
-                                if (!rotated || screenWidth > 1050)
+                                if (!rotated)
                                   Builder(
                                     builder: (context) => Padding(
                                       padding: const EdgeInsets.only(

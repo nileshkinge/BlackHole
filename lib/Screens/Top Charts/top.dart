@@ -107,7 +107,7 @@ class _TopChartsState extends State<TopCharts>
           backgroundColor: Colors.transparent,
           elevation: 0,
           automaticallyImplyLeading: false,
-          leading: (rotated && screenWidth < 1050)
+          leading: rotated
               ? null
               : Builder(
                   builder: (BuildContext context) {
@@ -204,9 +204,10 @@ Future<void> scrapData(String type, {bool signIn = false}) async {
       ),
       mode: LaunchMode.externalApplication,
     );
-    AppLinks(
-      onAppLink: (Uri uri, String link) async {
-        closeInAppWebView();
+    final appLinks = AppLinks();
+    appLinks.allUriLinkStream.listen(
+      (uri) async {
+        final link = uri.toString();
         if (link.contains('code=')) {
           final code = link.split('code=')[1];
           Hive.box('settings').put('spotifyAppCode', code);
@@ -330,9 +331,9 @@ class _TopPageState extends State<TopPage>
                         'Service Unavailable',
                         20,
                       )
-                    : Column(
+                    : const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           CircularProgressIndicator(),
                         ],
                       ),

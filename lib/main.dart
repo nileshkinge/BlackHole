@@ -48,6 +48,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
@@ -95,6 +96,7 @@ Future<void> setOptimalDisplayMode() async {
 
 Future<void> startService() async {
   await initializeLogging();
+  MetadataGod.initialize();
   final AudioPlayerHandler audioHandler = await AudioService.init(
     builder: () => AudioPlayerHandlerImpl(),
     config: AudioServiceConfig(
@@ -137,6 +139,7 @@ class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => _MyAppState();
 
+  // ignore: unreachable_from_main
   static _MyAppState of(BuildContext context) =>
       context.findAncestorStateOfType<_MyAppState>()!;
 }
@@ -170,32 +173,61 @@ class _MyAppState extends State<MyApp> {
       setState(() {});
     });
 
-    // For sharing or opening urls/text coming from outside the app while the app is in the memory
-    _intentTextStreamSubscription = ReceiveSharingIntent.getTextStream().listen(
-      (String value) {
-        Logger.root.info('Received intent on stream: $value');
-        handleSharedText(value, navigatorKey);
-      },
-      onError: (err) {
-        Logger.root.severe('ERROR in getTextStream', err);
-      },
-    );
+    if (Platform.isAndroid || Platform.isIOS) {
+      // For sharing or opening urls/text coming from outside the app while the app is in the memory
+      _intentTextStreamSubscription =
+          ReceiveSharingIntent.getTextStream().listen(
+        (String value) {
+          Logger.root.info('Received intent on stream: $value');
+          handleSharedText(value, navigatorKey);
+        },
+        onError: (err) {
+          Logger.root.severe('ERROR in getTextStream', err);
+        },
+      );
 
-    // For sharing or opening urls/text coming from outside the app while the app is closed
-    ReceiveSharingIntent.getInitialText().then(
-      (String? value) {
-        Logger.root.info('Received Intent initially: $value');
-        if (value != null) handleSharedText(value, navigatorKey);
-      },
-      onError: (err) {
-        Logger.root.severe('ERROR in getInitialTextStream', err);
-      },
-    );
+      // For sharing or opening urls/text coming from outside the app while the app is closed
+      ReceiveSharingIntent.getInitialText().then(
+        (String? value) {
+          Logger.root.info('Received Intent initially: $value');
+          if (value != null) handleSharedText(value, navigatorKey);
+        },
+        onError: (err) {
+          Logger.root.severe('ERROR in getInitialTextStream', err);
+        },
+      );
 
-    // For sharing files coming from outside the app while the app is in the memory
-    _intentDataStreamSubscription =
-        ReceiveSharingIntent.getMediaStream().listen(
-      (List<SharedMediaFile> value) {
+      // For sharing files coming from outside the app while the app is in the memory
+      _intentDataStreamSubscription =
+          ReceiveSharingIntent.getMediaStream().listen(
+        (List<SharedMediaFile> value) {
+          if (value.isNotEmpty) {
+            for (final file in value) {
+              if (file.path.endsWith('.json')) {
+                final List playlistNames = Hive.box('settings')
+                        .get('playlistNames')
+                        ?.toList() as List? ??
+                    ['Favorite Songs'];
+                importFilePlaylist(
+                  null,
+                  playlistNames,
+                  path: file.path,
+                  pickFile: false,
+                ).then(
+                  (value) => navigatorKey.currentState?.pushNamed('/playlists'),
+                );
+              }
+            }
+          }
+        },
+        onError: (err) {
+          Logger.root.severe('ERROR in getDataStream', err);
+        },
+      );
+
+      // For sharing files coming from outside the app while the app is closed
+      ReceiveSharingIntent.getInitialMedia()
+          .then((List<SharedMediaFile> value) {
         if (value.isNotEmpty) {
           for (final file in value) {
             if (file.path.endsWith('.json')) {
@@ -214,32 +246,8 @@ class _MyAppState extends State<MyApp> {
             }
           }
         }
-      },
-      onError: (err) {
-        Logger.root.severe('ERROR in getDataStream', err);
-      },
-    );
-
-    // For sharing files coming from outside the app while the app is closed
-    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
-      if (value.isNotEmpty) {
-        for (final file in value) {
-          if (file.path.endsWith('.json')) {
-            final List playlistNames =
-                Hive.box('settings').get('playlistNames')?.toList() as List? ??
-                    ['Favorite Songs'];
-            importFilePlaylist(
-              null,
-              playlistNames,
-              path: file.path,
-              pickFile: false,
-            ).then(
-              (value) => navigatorKey.currentState?.pushNamed('/playlists'),
-            );
-          }
-        }
-      }
-    });
+      });
+    }
   }
 
   void setLocale(Locale value) {
@@ -256,69 +264,76 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: AppTheme.themeMode == ThemeMode.dark
-            ? Colors.black38
-            : Colors.white,
-        statusBarIconBrightness: AppTheme.themeMode == ThemeMode.dark
-            ? Brightness.light
-            : Brightness.dark,
-        systemNavigationBarIconBrightness: AppTheme.themeMode == ThemeMode.dark
-            ? Brightness.light
-            : Brightness.dark,
-      ),
-    );
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-
-    return MaterialApp(
-      title: 'BlackHole',
-      restorationScopeId: 'blackhole',
-      debugShowCheckedModeBanner: false,
-      themeMode: AppTheme.themeMode,
-      theme: AppTheme.lightTheme(
-        context: context,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness: AppTheme.themeMode == ThemeMode.system
+            ? MediaQuery.platformBrightnessOf(context) == Brightness.dark
+                ? Brightness.light
+                : Brightness.dark
+            : AppTheme.themeMode == ThemeMode.dark
+                ? Brightness.light
+                : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            AppTheme.themeMode == ThemeMode.system
+                ? MediaQuery.platformBrightnessOf(context) == Brightness.dark
+                    ? Brightness.light
+                    : Brightness.dark
+                : AppTheme.themeMode == ThemeMode.dark
+                    ? Brightness.light
+                    : Brightness.dark,
       ),
-      darkTheme: AppTheme.darkTheme(
-        context: context,
+      child: MaterialApp(
+        title: 'BlackHole',
+        restorationScopeId: 'blackhole',
+        debugShowCheckedModeBanner: false,
+        themeMode: AppTheme.themeMode,
+        theme: AppTheme.lightTheme(
+          context: context,
+        ),
+        darkTheme: AppTheme.darkTheme(
+          context: context,
+        ),
+        locale: _locale,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: ConstantCodes.languageCodes.entries
+            .map((languageCode) => Locale(languageCode.value, ''))
+            .toList(),
+        routes: {
+          '/': (context) => initialFuntion(),
+          '/pref': (context) => const PrefScreen(),
+          '/setting': (context) => const SettingPage(),
+          '/about': (context) => AboutScreen(),
+          '/playlists': (context) => PlaylistScreen(),
+          '/nowplaying': (context) => NowPlaying(),
+          '/recent': (context) => RecentlyPlayed(),
+          '/downloads': (context) => const Downloads(),
+          '/stats': (context) => const Stats(),
+        },
+        navigatorKey: navigatorKey,
+        onGenerateRoute: (RouteSettings settings) {
+          if (settings.name == '/player') {
+            return PageRouteBuilder(
+              opaque: false,
+              pageBuilder: (_, __, ___) => const PlayScreen(),
+            );
+          }
+          return HandleRoute.handleRoute(settings.name);
+        },
       ),
-      locale: _locale,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: ConstantCodes.languageCodes.entries
-          .map((languageCode) => Locale(languageCode.value, ''))
-          .toList(),
-      routes: {
-        '/': (context) => initialFuntion(),
-        '/pref': (context) => const PrefScreen(),
-        '/setting': (context) => const SettingPage(),
-        '/about': (context) => AboutScreen(),
-        '/playlists': (context) => PlaylistScreen(),
-        '/nowplaying': (context) => NowPlaying(),
-        '/recent': (context) => RecentlyPlayed(),
-        '/downloads': (context) => const Downloads(),
-        '/stats': (context) => const Stats(),
-      },
-      navigatorKey: navigatorKey,
-      onGenerateRoute: (RouteSettings settings) {
-        if (settings.name == '/player') {
-          return PageRouteBuilder(
-            opaque: false,
-            pageBuilder: (_, __, ___) => const PlayScreen(),
-          );
-        }
-        return HandleRoute.handleRoute(settings.name);
-      },
     );
   }
 }
